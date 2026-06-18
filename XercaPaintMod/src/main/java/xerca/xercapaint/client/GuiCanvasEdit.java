@@ -67,6 +67,8 @@ public class GuiCanvasEdit extends BasePalette {
     private boolean gettingSigned;
     private boolean isCarryingCanvas;
     private boolean freshOpen = true;
+    private boolean middlePanning = false;
+    private boolean spacePanning = false;
     private Button buttonSign;
     private Button buttonCancel;
     private Button buttonFinalize;
@@ -588,6 +590,10 @@ public class GuiCanvasEdit extends BasePalette {
             }
             return true;
         } else {
+            if (keyCode == GLFW_KEY_SPACE) {
+                spacePanning = true;
+                return true;
+            }
             if (keyCode == GLFW.GLFW_KEY_Z && (modifiers & GLFW.GLFW_MOD_CONTROL) == GLFW.GLFW_MOD_CONTROL) {
                 if (!undoStack.isEmpty()) {
                     pixels = undoStack.pop();
@@ -607,6 +613,15 @@ public class GuiCanvasEdit extends BasePalette {
                 return super.keyPressed(keyCode, scanCode, modifiers);
             }
         }
+    }
+
+    @Override
+    public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
+        if (keyCode == GLFW_KEY_SPACE) {
+            spacePanning = false;
+            return true;
+        }
+        return super.keyReleased(keyCode, scanCode, modifiers);
     }
 
     private static boolean isAllowedChatCharacter(char var0) {
@@ -663,6 +678,15 @@ public class GuiCanvasEdit extends BasePalette {
 
         int mouseX = (int) Math.floor(posX);
         int mouseY = (int) Math.floor(posY);
+
+        // Middle mouse (or space, handled in keyPressed) starts panning the canvas; swallow the click.
+        if (mouseButton == GLFW_MOUSE_BUTTON_MIDDLE) {
+            middlePanning = true;
+            return true;
+        }
+        if (middlePanning || spacePanning) {
+            return true;
+        }
 
         undoStarted = true;
         touchedCanvas = false;
@@ -747,6 +771,10 @@ public class GuiCanvasEdit extends BasePalette {
 
     @Override
     public boolean mouseReleased(double posX, double posY, int mouseButton) {
+        if (mouseButton == GLFW_MOUSE_BUTTON_MIDDLE) {
+            middlePanning = false;
+            return true;
+        }
         isCarryingCanvas = false;
         if (gettingSigned) {
             return super.superMouseReleased(posX, posY, mouseButton);
@@ -773,6 +801,10 @@ public class GuiCanvasEdit extends BasePalette {
     public boolean mouseDragged(double posX, double posY, int mouseButton, double deltaX, double deltaY) {
         if (gettingSigned) {
             return super.superMouseDragged(posX, posY, mouseButton, deltaX, deltaY);
+        }
+        if (middlePanning || spacePanning) {
+            updateCanvasPos(deltaX, deltaY);
+            return true;
         }
         if (!isCarryingColor && !isCarryingWater && !isPickingColor && !isCarryingPalette && !isCarryingCanvas && !isFilling) {
             int mouseX = (int) Math.floor(posX);
