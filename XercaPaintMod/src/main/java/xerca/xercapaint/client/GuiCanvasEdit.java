@@ -66,9 +66,11 @@ public class GuiCanvasEdit extends BasePalette {
     private boolean undoStarted = false;
     private boolean gettingSigned;
     private boolean isCarryingCanvas;
+    private boolean freshOpen = true;
     private Button buttonSign;
     private Button buttonCancel;
     private Button buttonFinalize;
+    private Button buttonCenter;
     private int updateCount;
     private BrushSound brushSound = null;
     private static final int CANVAS_HOLDER_HEIGHT = 10;
@@ -102,6 +104,15 @@ public class GuiCanvasEdit extends BasePalette {
             new Vec2(147.f, 199.0f),
             new Vec2(169.f, 199.0f),
     };
+
+    // Brush pixel shapes (offsets from the anchor pixel), matching setPixelsAt. Used to draw a brush
+    // outline that follows the real (rounded) shape when zoomed in.
+    private static final int[][] BRUSH_SHAPE_0 = {{0, 0}};
+    private static final int[][] BRUSH_SHAPE_1 = {{0, 0}, {-1, 0}, {0, -1}, {-1, -1}};
+    private static final int[][] BRUSH_SHAPE_2 = {{-1, 1}, {0, 1}, {-2, 0}, {-1, 0}, {0, 0}, {1, 0}, {-2, -1}, {-1, -1}, {0, -1}, {1, -1}, {-1, -2}, {0, -2}};
+    private static final int[][] BRUSH_SHAPE_3 = {{-1, 2}, {0, 2}, {1, 2}, {-2, 1}, {-1, 1}, {0, 1}, {1, 1}, {2, 1}, {-2, 0}, {-1, 0}, {0, 0}, {1, 0}, {2, 0}, {-2, -1}, {-1, -1}, {0, -1}, {1, -1}, {2, -1}, {-1, -2}, {0, -2}, {1, -2}};
+    private static final int[][][] BRUSH_SHAPES = {BRUSH_SHAPE_0, BRUSH_SHAPE_1, BRUSH_SHAPE_2, BRUSH_SHAPE_3};
+    private static final boolean[] BRUSH_HALF = {false, true, true, false};
 
     private static final int MAX_UNDO_LENGTH = 16;
     private final Deque<int[]> undoStack = new ArrayDeque<>(MAX_UNDO_LENGTH);
@@ -145,12 +156,19 @@ public class GuiCanvasEdit extends BasePalette {
             return;
         }
         int typeIndex = canvasType.toByte();
-        canvasX = CANVAS_XS[typeIndex];
-        canvasY = CANVAS_YS[typeIndex];
-        paletteX = PALETTE_XS[typeIndex];
-        paletteY = PALETTE_YS[typeIndex];
-        if (canvasX == POSITION_UNSET || canvasY == POSITION_UNSET || paletteX == POSITION_UNSET || paletteY == POSITION_UNSET) {
+        if (freshOpen) {
+            // Always start centered when first opening the canvas to paint.
             resetPositions();
+            freshOpen = false;
+        } else {
+            // Re-init mid-session (window resize, returning from the hex picker): keep the position.
+            canvasX = CANVAS_XS[typeIndex];
+            canvasY = CANVAS_YS[typeIndex];
+            paletteX = PALETTE_XS[typeIndex];
+            paletteY = PALETTE_YS[typeIndex];
+            if (canvasX == POSITION_UNSET || canvasY == POSITION_UNSET || paletteX == POSITION_UNSET || paletteY == POSITION_UNSET) {
+                resetPositions();
+            }
         }
 
         updateCanvasPos(0, 0);
@@ -173,6 +191,12 @@ public class GuiCanvasEdit extends BasePalette {
                 GLFW.glfwSetInputMode(window.getWindow(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
             }
         }).bounds(x, y, 98, 20).build());
+        // Re-centre the canvas + palette (keeps the current zoom). Fixed screen position, left of "Sign".
+        this.buttonCenter = this.addRenderableWidget(Button.builder(Component.translatable("canvas.centerButton"), button -> {
+            resetPositions();
+            updateCanvasPos(0, 0);
+            updatePalettePos(0, 0);
+        }).bounds(x - 64, y, 60, 20).build());
         this.buttonFinalize = this.addRenderableWidget(Button.builder(Component.translatable("canvas.finalizeButton"), button -> {
             if (!isSigned) {
                 canvasDirty = true;
@@ -203,6 +227,7 @@ public class GuiCanvasEdit extends BasePalette {
 
     private void updateButtons() {
         if (!this.isSigned) {
+            this.buttonCenter.visible = !this.gettingSigned;
             this.buttonSign.visible = !this.gettingSigned;
             this.buttonCancel.visible = this.gettingSigned;
             this.buttonFinalize.visible = this.gettingSigned;
@@ -466,14 +491,50 @@ public class GuiCanvasEdit extends BasePalette {
                 RenderSystem.setShaderColor(0.3F, 0.3F, 0.3F, 1.0F);
                 guiGraphics.blit(PALETTE_TEXTURES, x, y, (int) textureVec.x, (int) textureVec.y, outlineSize, outlineSize);
             } else {
-                // Draw the brush outline programmatically so it stays correct at any zoom.
-                int c = 0xFF4D4D4D;
-                guiGraphics.fill(x, y, x + outlineSize, y + 1, c);
-                guiGraphics.fill(x, y + outlineSize - 1, x + outlineSize, y + outlineSize, c);
-                guiGraphics.fill(x, y, x + 1, y + outlineSize, c);
-                guiGraphics.fill(x + outlineSize - 1, y, x + outlineSize, y + outlineSize, c);
+                // Draw the outline programmatically, tracing the real brush shape so rounded brushes
+                // don't look square when zoomed in.
+                drawBrushShapeOutline(guiGraphics, mouseX, mouseY, brushSize, pixelHalf);
             }
         }
+    }
+
+    // Traces the outline of the actual brush pixels (so size 2/3 stay rounded at any zoom).
+    private void drawBrushShapeOutline(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, int brushSize, int pixelHalf) {
+        if (brushSize < 0 || brushSize >= BRUSH_SHAPES.length) {
+            return;
+        }
+        int[][] shape = BRUSH_SHAPES[brushSize];
+        int adjust = BRUSH_HALF[brushSize] ? pixelHalf : 0;
+        int anchorX = (mouseX - (int) canvasX + adjust) / canvasPixelScale;
+        int anchorY = (mouseY - (int) canvasY + adjust) / canvasPixelScale;
+        int scale = canvasPixelScale;
+        int t = Math.max(1, scale / 10);
+        int color = 0xFF4D4D4D;
+        for (int[] off : shape) {
+            int sx = (int) canvasX + (anchorX + off[0]) * scale;
+            int sy = (int) canvasY + (anchorY + off[1]) * scale;
+            if (!brushContains(shape, off[0] - 1, off[1])) {
+                guiGraphics.fill(sx, sy, sx + t, sy + scale, color);
+            }
+            if (!brushContains(shape, off[0] + 1, off[1])) {
+                guiGraphics.fill(sx + scale - t, sy, sx + scale, sy + scale, color);
+            }
+            if (!brushContains(shape, off[0], off[1] - 1)) {
+                guiGraphics.fill(sx, sy, sx + scale, sy + t, color);
+            }
+            if (!brushContains(shape, off[0], off[1] + 1)) {
+                guiGraphics.fill(sx, sy + scale - t, sx + scale, sy + scale, color);
+            }
+        }
+    }
+
+    private static boolean brushContains(int[][] shape, int dx, int dy) {
+        for (int[] off : shape) {
+            if (off[0] == dx && off[1] == dy) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void drawSigning(@NotNull GuiGraphics guiGraphics) {

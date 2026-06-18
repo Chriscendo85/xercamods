@@ -19,7 +19,8 @@ public record PictureSendPacket(String canvasId, int version, int[] pixels) impl
     public static PictureSendPacket decode(FriendlyByteBuf buf) {
         String canvasId = buf.readUtf(64);
         int version = buf.readInt();
-        int[] pixels = buf.readVarIntArray(1024);
+        // Max pixels = the largest canvas (4x4 blocks = 64x64).
+        int[] pixels = buf.readVarIntArray(64 * 64);
         return new PictureSendPacket(canvasId, version, pixels);
     }
 
