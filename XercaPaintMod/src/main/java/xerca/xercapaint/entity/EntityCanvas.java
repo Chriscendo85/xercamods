@@ -13,9 +13,11 @@ import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerEntity;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.decoration.HangingEntity;
@@ -113,6 +115,20 @@ public class EntityCanvas extends HangingEntity {
     }
 
     @Override
+    public boolean broadcastToPlayer(@NotNull ServerPlayer player) {
+        // Hide the painting from players that aren't running the Delta client (ditto bridge),
+        // so they never receive the modded entity. Server-side logic is unaffected.
+        return super.broadcastToPlayer(player) && xerca.xercapaint.DittoCompat.canSeeModdedEntities(player);
+    }
+
+    @Override
+    public boolean isInvulnerableTo(@NotNull DamageSource source) {
+        // Only a player breaking it by hand may destroy it; resist fireballs, arrows, explosions,
+        // fire, mob attacks, etc. (anything not dealt directly by a player).
+        return !(source.getDirectEntity() instanceof Player) || super.isInvulnerableTo(source);
+    }
+
+    @Override
     protected void defineSynchedData(SynchedEntityData.@NotNull Builder builder) {
         builder.define(CANVAS_ID, "");
         builder.define(CANVAS_VERSION, 0);
@@ -144,20 +160,8 @@ public class EntityCanvas extends HangingEntity {
             if (brokenEntity instanceof Player playerEntity && playerEntity.getAbilities().instabuild) {
                 return;
             }
-            ItemStack canvasItem;
             CanvasType canvasType = getCanvasType();
-            if (canvasType == CanvasType.SMALL) {
-                canvasItem = new ItemStack(Items.ITEM_CANVAS);
-            } else if (canvasType == CanvasType.LARGE) {
-                canvasItem = new ItemStack(Items.ITEM_CANVAS_LARGE);
-            } else if (canvasType == CanvasType.LONG) {
-                canvasItem = new ItemStack(Items.ITEM_CANVAS_LONG);
-            } else if (canvasType == CanvasType.TALL) {
-                canvasItem = new ItemStack(Items.ITEM_CANVAS_TALL);
-            } else {
-                Mod.LOGGER.error("Invalid canvas type");
-                return;
-            }
+            ItemStack canvasItem = new ItemStack(Items.canvasItemFor(canvasType));
 
             canvasItem.set(Items.CANVAS_ID, getCanvasID());
             canvasItem.set(Items.CANVAS_VERSION, getVersion());
@@ -212,7 +216,9 @@ public class EntityCanvas extends HangingEntity {
     }
 
     private double offs(int l) {
-        return l % 32 == 0 ? 0.5D : 0.0D;
+        // Anchor the canvas at the clicked block (it grows toward the opposite corner) for any size.
+        // Matches the old values for 1- and 2-block canvases (0.0 and 0.5).
+        return l / 32.0D - 0.5D;
     }
 
     @Override
@@ -385,8 +391,8 @@ public class EntityCanvas extends HangingEntity {
 
     @Override
     public @NotNull InteractionResult interact(@NotNull Player player, @NotNull InteractionHand hand) {
-        CanvasType canvasType = this.getCanvasType();
-        if (canvasType == CanvasType.SMALL || canvasType == CanvasType.LARGE) {
+        // Only square canvases can be rotated in place.
+        if (getWidth() == getHeight()) {
             if (!this.level().isClientSide) {
                 setRotation(getRotation() + 1);
             }

@@ -48,6 +48,14 @@ dependencies {
     // Fabric API. This is technically optional, but you probably want it anyway.
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
+    // ditto / DeltaMod integration: lets vanilla (non-Delta-client) players join a server
+    // that has XercaPaint installed without seeing its modded entities. These mods are
+    // installed on the server at runtime, so we only compile against them (not bundled).
+    // - DeltaMod.jar provides the dev.delta.deltamod.ditto.DittoItem interface.
+    // - ditto-*.jar provides the dev.delta.ditto.Ditto entry point.
+    modCompileOnly files("../../ditto/libs/DeltaMod.jar")
+    modCompileOnly files("../../ditto/build/libs/ditto-1.0.0-SNAPSHOT.jar")
+
     // Error Prone
     errorprone("com.google.errorprone:error_prone_core:2.43.0")
 

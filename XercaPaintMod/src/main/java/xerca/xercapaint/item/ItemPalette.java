@@ -3,6 +3,7 @@ package xerca.xercapaint.item;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.DynamicOps;
 import com.mojang.serialization.codecs.PrimitiveCodec;
+import dev.delta.deltamod.ditto.DittoItem;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
@@ -22,11 +23,22 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.IntStream;
 
-public class ItemPalette extends Item {
+public class ItemPalette extends Item implements DittoItem {
     private static final int BASIC_COLOR_COUNT = 16;
 
     ItemPalette() {
         super(new Properties().stacksTo(1));
+    }
+
+    // ditto: what a non-Delta-client (vanilla) player sees in place of this modded item.
+    @Override
+    public ItemStack getVanillaItemStack(ItemStack stack) {
+        return new ItemStack(net.minecraft.world.item.Items.BOWL, stack.getCount());
+    }
+
+    @Override
+    public Item getVanillaItem() {
+        return net.minecraft.world.item.Items.BOWL;
     }
 
     @Nonnull

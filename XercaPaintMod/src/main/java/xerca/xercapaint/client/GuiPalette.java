@@ -63,6 +63,9 @@ public class GuiPalette extends BasePalette {
 
     @Override
     public void removed() {
+        if (suppressRemove) {
+            return; // suspended while the hex picker popup is open; don't save yet
+        }
         if (paletteDirty) {
             ClientPlayNetworking.send(new PaletteUpdatePacket(customColors));
         }

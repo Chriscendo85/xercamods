@@ -27,6 +27,7 @@ public class CommandImport {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(
                 Commands.literal("paintimport")
+                        .requires(source -> source.hasPermission(Commands.LEVEL_GAMEMASTERS))
                         .then(Commands.argument("name", StringArgumentType.word())
                                 .executes(p -> paintImport(p.getSource(), StringArgumentType.getString(p, "name"))))
         );
@@ -108,16 +109,7 @@ public class CommandImport {
                 Mod.LOGGER.error("Invalid canvas type");
                 return;
             }
-            switch (type) {
-                case SMALL -> itemStack = new ItemStack(Items.ITEM_CANVAS);
-                case LONG -> itemStack = new ItemStack(Items.ITEM_CANVAS_LONG);
-                case TALL -> itemStack = new ItemStack(Items.ITEM_CANVAS_TALL);
-                case LARGE -> itemStack = new ItemStack(Items.ITEM_CANVAS_LARGE);
-                default -> {
-                    Mod.LOGGER.error("Unknown canvas type");
-                    return;
-                }
-            }
+            itemStack = new ItemStack(Items.canvasItemFor(type));
             doAddItem = true;
         } else {
             ItemStack mainHand = player.getMainHandItem();
@@ -132,13 +124,7 @@ public class CommandImport {
                 if (type == null) {
                     return;
                 }
-                Component typeName;
-                switch (type) {
-                    case LONG -> typeName = Items.ITEM_CANVAS_LONG.getName(ItemStack.EMPTY);
-                    case TALL -> typeName = Items.ITEM_CANVAS_TALL.getName(ItemStack.EMPTY);
-                    case LARGE -> typeName = Items.ITEM_CANVAS_LARGE.getName(ItemStack.EMPTY);
-                    default -> typeName = Items.ITEM_CANVAS.getName(ItemStack.EMPTY);
-                }
+                Component typeName = Items.canvasItemFor(type).getName(ItemStack.EMPTY);
                 player.sendSystemMessage(Component.translatable("xercapaint.import.fail.2", typeName).withStyle(ChatFormatting.RED));
                 return;
             }

@@ -73,6 +73,20 @@ public class EntityEasel extends Entity {
     }
 
     @Override
+    public boolean broadcastToPlayer(@NotNull ServerPlayer player) {
+        // Hide the easel from players that aren't running the Delta client (ditto bridge),
+        // so they never receive the modded entity. Server-side logic is unaffected.
+        return super.broadcastToPlayer(player) && xerca.xercapaint.DittoCompat.canSeeModdedEntities(player);
+    }
+
+    @Override
+    public boolean isInvulnerableTo(@NotNull DamageSource source) {
+        // Only a player breaking it by hand may destroy it / knock off its canvas; resist fireballs,
+        // arrows, explosions, fire, mob attacks, etc. (anything not dealt directly by a player).
+        return !(source.getDirectEntity() instanceof Player) || super.isInvulnerableTo(source);
+    }
+
+    @Override
     public boolean hurt(@NotNull DamageSource damageSource, float amount) {
         if (this.isInvulnerableTo(damageSource)) {
             return false;

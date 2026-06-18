@@ -36,8 +36,9 @@ public class RenderEntityCanvas extends EntityRenderer<EntityCanvas> {
     private static final int[] EMPTY_PIXELS;
 
     static {
-        EMPTY_PIXELS = new int[1024];
-        for (int i = 0; i < 1024; i++) {
+        // Large enough for the biggest canvas (4x4 blocks = 64x64 pixels).
+        EMPTY_PIXELS = new int[64 * 64];
+        for (int i = 0; i < EMPTY_PIXELS.length; i++) {
             EMPTY_PIXELS[i] = PaletteUtil.Color.WHITE.rgbVal();
         }
     }

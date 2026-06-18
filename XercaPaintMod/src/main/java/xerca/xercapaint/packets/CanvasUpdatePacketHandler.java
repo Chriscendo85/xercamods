@@ -10,9 +10,12 @@ import xerca.xercapaint.item.ItemCanvas;
 import xerca.xercapaint.item.ItemPalette;
 import xerca.xercapaint.item.Items;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 
 public class CanvasUpdatePacketHandler implements ServerPlayNetworking.PlayPayloadHandler<CanvasUpdatePacket> {
+    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("MM/dd/yy");
 
     public static void processMessage(CanvasUpdatePacket msg, ServerPlayer pl) {
         ItemStack canvas;
@@ -72,6 +75,10 @@ public class CanvasUpdatePacketHandler implements ServerPlayNetworking.PlayPaylo
                 canvas.set(Items.CANVAS_AUTHOR, pl.getName().getString());
                 canvas.set(Items.CANVAS_TITLE, msg.title().trim());
                 canvas.set(Items.CANVAS_GENERATION, 1);
+                // Stamp the creation date (only set once, when the painting is first signed).
+                if (canvas.get(Items.CANVAS_DATE) == null) {
+                    canvas.set(Items.CANVAS_DATE, LocalDate.now().format(DATE_FORMAT));
+                }
             }
 
             if (!palette.isEmpty() && palette.getItem() == Items.ITEM_PALETTE) {

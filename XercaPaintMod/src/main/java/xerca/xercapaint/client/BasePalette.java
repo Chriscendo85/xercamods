@@ -40,8 +40,9 @@ public abstract class BasePalette extends Screen {
     static final int COLOR_PICKER_POS_Y = 62;
     static final int COLOR_PICKER_SIZE = 14;
 
-    static final double[] PALETTE_XS = {-1000, -1000, -1000, -1000, -1000};
-    static final double[] PALETTE_YS = {-1000, -1000, -1000, -1000, -1000};
+    // Indices 0..9 are per canvas type (CanvasType.toByte()); the last index is the standalone palette screen.
+    static final double[] PALETTE_XS = {-1000, -1000, -1000, -1000, -1000, -1000, -1000, -1000, -1000, -1000, -1000};
+    static final double[] PALETTE_YS = {-1000, -1000, -1000, -1000, -1000, -1000, -1000, -1000, -1000, -1000, -1000};
     double paletteX;
     double paletteY;
     static final PaletteUtil.Color WATER_COLOR = new PaletteUtil.Color(53, 118, 191);
@@ -96,7 +97,8 @@ public abstract class BasePalette extends Screen {
             new Vec2(142.5f, 080.0f),
             new Vec2(144.5f, 062.0f),
     };
-    static final Vec2 WATER_CENTER = new Vec2(140.5f, 28.f);
+    static final Vec2 WATER_CENTER = new Vec2(140.5f, 42.f);
+    static final Vec2 HEX_BUTTON_CENTER = new Vec2(140.5f, 22.f);
     static final float BASIC_COLOR_RADIUS = 11.f;
     static final float CUSTOM_COLOR_RADIUS = 6.5f;
 
@@ -112,6 +114,8 @@ public abstract class BasePalette extends Screen {
     final boolean[] basicColorFlags;
     boolean paletteComplete = false;
     boolean isCarryingPalette = false;
+    // When opening the hex picker popup we suspend (not close) this screen, so skip the save-on-remove.
+    protected boolean suppressRemove = false;
 
     BasePalette(Component titleIn, ItemStack paletteStack) {
         super(titleIn);
@@ -176,6 +180,26 @@ public abstract class BasePalette extends Screen {
         if (paletteComplete) {
             guiGraphics.blit(PALETTE_TEXTURES, (int) paletteX + COLOR_PICKER_POS_X, (int) paletteY + COLOR_PICKER_POS_Y, COLOR_PICKER_SPRITE_X, COLOR_PICKER_SPRITE_Y, COLOR_PICKER_SIZE, COLOR_PICKER_SIZE);
         }
+
+        // Draw the hex color picker button (a small rainbow swatch) above the water button
+        drawHexButton(guiGraphics);
+    }
+
+    private void drawHexButton(GuiGraphics guiGraphics) {
+        // A rainbow-filled disc the same size as the water circle, to match the dye colour buttons.
+        int cx = (int) paletteX + (int) HEX_BUTTON_CENTER.x;
+        int cy = (int) paletteY + (int) HEX_BUTTON_CENTER.y;
+        float r = CUSTOM_COLOR_RADIUS;
+        int ri = (int) Math.ceil(r);
+        for (int dy = -ri; dy <= ri; dy++) {
+            for (int dx = -ri; dx <= ri; dx++) {
+                if (dx * dx + dy * dy <= r * r) {
+                    float hue = (dx + r) / (2.0f * r);
+                    guiGraphics.fill(cx + dx, cy + dy, cx + dx + 1, cy + dy + 1, HexColorPickerScreen.hsbToArgb(hue, 0.85f, 1.0f));
+                }
+            }
+        }
+        RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
     }
 
     protected boolean superMouseClicked(double posX, double posY, int mouseButton) {
@@ -231,6 +255,11 @@ public abstract class BasePalette extends Screen {
                 }
             }
 
+            if (!didSomething && inHexButton(x, y) && mouseButton == 0) {
+                openHexPicker();
+                didSomething = true;
+            }
+
             if (!didSomething && sqrDist(clickVec, WATER_CENTER) <= sqrCustomRadius && mouseButton == 0) {
                 setCarryingWater();
                 playSound(SoundEvents.WATER);
@@ -256,6 +285,31 @@ public abstract class BasePalette extends Screen {
 
     protected boolean inWater(int x, int y) {
         return sqrDist(new Vec2(x, y), WATER_CENTER) <= CUSTOM_COLOR_RADIUS * CUSTOM_COLOR_RADIUS;
+    }
+
+    protected boolean inHexButton(int x, int y) {
+        return sqrDist(new Vec2(x, y), HEX_BUTTON_CENTER) <= CUSTOM_COLOR_RADIUS * CUSTOM_COLOR_RADIUS;
+    }
+
+    protected void openHexPicker() {
+        if (minecraft != null) {
+            playSound(SoundEvents.COLOR_PICKER);
+            suppressRemove = true;
+            minecraft.setScreen(new HexColorPickerScreen(this));
+        }
+    }
+
+    /** Called back by the hex picker: make the chosen color active and store it in the first free custom slot. */
+    void addPickedColor(PaletteUtil.Color color) {
+        currentColor = color;
+        for (PaletteUtil.CustomColor customColor : customColors) {
+            if (customColor.getNumberOfColors() == 0) {
+                customColor.mix(color);
+                paletteDirty = true;
+                playSound(SoundEvents.MIX);
+                break;
+            }
+        }
     }
 
     protected void setCarryingWater() {

@@ -27,6 +27,7 @@ public class GuiCanvasView extends Screen {
     private int[] pixels;
     private String authorName = "";
     private String canvasTitle = "";
+    private String createdDate = "";
     private int generation = 0;
     private final EntityEasel easel;
     private final Player player;
@@ -46,6 +47,7 @@ public class GuiCanvasView extends Screen {
         if (stackPixels != null) {
             this.authorName = canvasStack.get(Items.CANVAS_AUTHOR);
             this.canvasTitle = canvasStack.getOrDefault(Items.CANVAS_TITLE, "");
+            this.createdDate = canvasStack.getOrDefault(Items.CANVAS_DATE, "");
             this.generation = canvasStack.getOrDefault(Items.CANVAS_GENERATION, 0);
 
             this.pixels = stackPixels.stream().mapToInt(i -> i).toArray();
@@ -95,6 +97,17 @@ public class GuiCanvasView extends Screen {
 
             guiGraphics.drawString(font, title, (int) titleX, (canvasY - 25), 0xFF111111, false);
             guiGraphics.drawString(font, gen, (int) genX, canvasY - 14, 0xFF444444, false);
+        }
+
+        // "Created on <date>" below the canvas (older paintings without a date show nothing).
+        if (!createdDate.isEmpty()) {
+            int canvasHeight = canvasPixelHeight * canvasPixelScale;
+            String dateStr = I18n.get("canvas.createdOn", createdDate);
+            int dateWidth = this.font.width(dateStr);
+            int dateX = canvasX + (canvasWidth - dateWidth) / 2;
+            int dateY = canvasY + canvasHeight + 6;
+            guiGraphics.fill(dateX - 8, dateY - 3, dateX + dateWidth + 8, dateY + 11, 0xFFEEEEEE);
+            guiGraphics.drawString(font, dateStr, dateX, dateY, 0xFF444444, false);
         }
     }
 

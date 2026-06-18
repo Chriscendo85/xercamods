@@ -1,5 +1,6 @@
 package xerca.xercapaint.item;
 
+import dev.delta.deltamod.ditto.DittoItem;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -26,7 +27,7 @@ import javax.annotation.Nullable;
 import java.util.List;
 
 @NonnullDefault
-public class ItemCanvas extends HangingEntityItem {
+public class ItemCanvas extends HangingEntityItem implements DittoItem {
     private static final int ORIGINAL_GENERATION = 1;
     private static final int COPY_GENERATION = 3;
     private final CanvasType canvasType;
@@ -34,6 +35,17 @@ public class ItemCanvas extends HangingEntityItem {
     ItemCanvas(CanvasType canvasType) {
         super(Entities.CANVAS, new Item.Properties().stacksTo(1));
         this.canvasType = canvasType;
+    }
+
+    // ditto: what a non-Delta-client (vanilla) player sees in place of this modded item.
+    @Override
+    public ItemStack getVanillaItemStack(ItemStack stack) {
+        return new ItemStack(net.minecraft.world.item.Items.PAPER, stack.getCount());
+    }
+
+    @Override
+    public Item getVanillaItem() {
+        return net.minecraft.world.item.Items.PAPER;
     }
 
     @Override
@@ -164,6 +176,12 @@ public class ItemCanvas extends HangingEntityItem {
             // generation = 0 means empty, 1 means original, more means copy
             if (generation > 0) {
                 tooltipComponents.add(Component.translatable("canvas.generation." + (generation - 1)).withStyle(ChatFormatting.GRAY));
+            }
+
+            // Older paintings (made before this was added) simply have no date and show nothing here.
+            String createdOn = stack.get(Items.CANVAS_DATE);
+            if (!StringUtil.isNullOrEmpty(createdOn)) {
+                tooltipComponents.add(Component.translatable("canvas.createdOn", createdOn).withStyle(ChatFormatting.GRAY));
             }
         } else {
             tooltipComponents.add(Component.translatable("canvas.empty").withStyle(ChatFormatting.GRAY));

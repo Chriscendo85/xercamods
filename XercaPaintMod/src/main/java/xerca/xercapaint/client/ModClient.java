@@ -84,6 +84,12 @@ public class ModClient implements ClientModInitializer {
         BuiltinItemRendererRegistry.INSTANCE.register(Items.ITEM_CANVAS_LARGE, canvasItemRenderer);
         BuiltinItemRendererRegistry.INSTANCE.register(Items.ITEM_CANVAS_LONG, canvasItemRenderer);
         BuiltinItemRendererRegistry.INSTANCE.register(Items.ITEM_CANVAS_TALL, canvasItemRenderer);
+        BuiltinItemRendererRegistry.INSTANCE.register(Items.ITEM_CANVAS_EXTRA_LARGE, canvasItemRenderer);
+        BuiltinItemRendererRegistry.INSTANCE.register(Items.ITEM_CANVAS_EXTRA_EXTRA_LARGE, canvasItemRenderer);
+        BuiltinItemRendererRegistry.INSTANCE.register(Items.ITEM_CANVAS_EXTRA_LONG, canvasItemRenderer);
+        BuiltinItemRendererRegistry.INSTANCE.register(Items.ITEM_CANVAS_EXTRA_EXTRA_LONG, canvasItemRenderer);
+        BuiltinItemRendererRegistry.INSTANCE.register(Items.ITEM_CANVAS_EXTRA_TALL, canvasItemRenderer);
+        BuiltinItemRendererRegistry.INSTANCE.register(Items.ITEM_CANVAS_EXTRA_EXTRA_TALL, canvasItemRenderer);
 
         EntityRendererRegistry.register(Entities.EASEL, new RenderEntityEasel.RenderEntityEaselFactory());
         EntityRendererRegistry.register(Entities.CANVAS, new RenderEntityCanvas.RenderEntityCanvasFactory());
@@ -100,6 +106,12 @@ public class ModClient implements ClientModInitializer {
         ItemProperties.register(Items.ITEM_CANVAS_LARGE, Mod.id(DRAWN_PREDICATE_ID), drawn);
         ItemProperties.register(Items.ITEM_CANVAS_LONG, Mod.id(DRAWN_PREDICATE_ID), drawn);
         ItemProperties.register(Items.ITEM_CANVAS_TALL, Mod.id(DRAWN_PREDICATE_ID), drawn);
+        ItemProperties.register(Items.ITEM_CANVAS_EXTRA_LARGE, Mod.id(DRAWN_PREDICATE_ID), drawn);
+        ItemProperties.register(Items.ITEM_CANVAS_EXTRA_EXTRA_LARGE, Mod.id(DRAWN_PREDICATE_ID), drawn);
+        ItemProperties.register(Items.ITEM_CANVAS_EXTRA_LONG, Mod.id(DRAWN_PREDICATE_ID), drawn);
+        ItemProperties.register(Items.ITEM_CANVAS_EXTRA_EXTRA_LONG, Mod.id(DRAWN_PREDICATE_ID), drawn);
+        ItemProperties.register(Items.ITEM_CANVAS_EXTRA_TALL, Mod.id(DRAWN_PREDICATE_ID), drawn);
+        ItemProperties.register(Items.ITEM_CANVAS_EXTRA_EXTRA_TALL, Mod.id(DRAWN_PREDICATE_ID), drawn);
         ItemProperties.register(Items.ITEM_PALETTE, Mod.id("colors"), colors);
 
         ClientPlayNetworking.registerGlobalReceiver(CloseGuiPacket.PACKET_ID, new CloseGuiPacketHandler());

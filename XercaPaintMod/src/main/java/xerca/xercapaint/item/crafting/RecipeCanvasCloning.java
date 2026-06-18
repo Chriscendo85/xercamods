@@ -30,7 +30,7 @@ public class RecipeCanvasCloning extends CustomRecipe {
         for (int j = 0; j < inv.size(); ++j) {
             ItemStack stack = inv.getItem(j);
             if (!stack.isEmpty()) {
-                if (stack.getItem() instanceof ItemCanvas && stack.getOrDefault(Items.CANVAS_GENERATION, 0) > 0) {
+                if (stack.getItem() instanceof ItemCanvas && stack.getOrDefault(Items.CANVAS_GENERATION, 0) == 1) {
                     if (!orgCanvas.isEmpty()) {
                         return false;
                     }
@@ -66,7 +66,7 @@ public class RecipeCanvasCloning extends CustomRecipe {
         for (int j = 0; j < inv.size(); ++j) {
             ItemStack stack = inv.getItem(j);
             if (!stack.isEmpty()) {
-                if (stack.getItem() instanceof ItemCanvas && stack.getOrDefault(Items.CANVAS_GENERATION, 0) > 0) {
+                if (stack.getItem() instanceof ItemCanvas && stack.getOrDefault(Items.CANVAS_GENERATION, 0) == 1) {
                     if (!orgCanvas.isEmpty()) {
                         return ItemStack.EMPTY;
                     }
@@ -89,7 +89,8 @@ public class RecipeCanvasCloning extends CustomRecipe {
         }
 
         int gen = orgCanvas.getOrDefault(Items.CANVAS_GENERATION, 0);
-        if (!orgCanvas.isEmpty() && !freshCanvas.isEmpty() && gen > 0 && gen < 3) {
+        // Only an original (generation 1) may be copied. Copies (generation 2+) cannot be re-copied.
+        if (!orgCanvas.isEmpty() && !freshCanvas.isEmpty() && gen == 1) {
             ItemStack resultStack = new ItemStack(orgCanvas.getItem());
             resultStack.set(Items.CANVAS_GENERATION, gen + 1);
             resultStack.set(Items.CANVAS_PIXELS, orgCanvas.get(Items.CANVAS_PIXELS));
@@ -97,6 +98,8 @@ public class RecipeCanvasCloning extends CustomRecipe {
             resultStack.set(Items.CANVAS_VERSION, orgCanvas.get(Items.CANVAS_VERSION));
             resultStack.set(Items.CANVAS_TITLE, orgCanvas.get(Items.CANVAS_TITLE));
             resultStack.set(Items.CANVAS_AUTHOR, orgCanvas.get(Items.CANVAS_AUTHOR));
+            // Copies keep the original's creation date (null/absent for pre-update originals, which is fine).
+            resultStack.set(Items.CANVAS_DATE, orgCanvas.get(Items.CANVAS_DATE));
             return resultStack;
         } else {
             return ItemStack.EMPTY;

@@ -4,6 +4,8 @@
   "package": "xerca.xercapaint.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "EntityMixin",
+    "ItemEntityMixin",
     "ItemStackComponentizationFixMixin",
     "V1460Mixin"
   ],

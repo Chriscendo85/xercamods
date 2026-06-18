@@ -31,7 +31,28 @@ public final class Items {
     public static final ItemCanvas ITEM_CANVAS_LARGE = new ItemCanvas(CanvasType.LARGE);
     public static final ItemCanvas ITEM_CANVAS_LONG = new ItemCanvas(CanvasType.LONG);
     public static final ItemCanvas ITEM_CANVAS_TALL = new ItemCanvas(CanvasType.TALL);
+    public static final ItemCanvas ITEM_CANVAS_EXTRA_LARGE = new ItemCanvas(CanvasType.EXTRA_LARGE);
+    public static final ItemCanvas ITEM_CANVAS_EXTRA_EXTRA_LARGE = new ItemCanvas(CanvasType.EXTRA_EXTRA_LARGE);
+    public static final ItemCanvas ITEM_CANVAS_EXTRA_LONG = new ItemCanvas(CanvasType.EXTRA_LONG);
+    public static final ItemCanvas ITEM_CANVAS_EXTRA_EXTRA_LONG = new ItemCanvas(CanvasType.EXTRA_EXTRA_LONG);
+    public static final ItemCanvas ITEM_CANVAS_EXTRA_TALL = new ItemCanvas(CanvasType.EXTRA_TALL);
+    public static final ItemCanvas ITEM_CANVAS_EXTRA_EXTRA_TALL = new ItemCanvas(CanvasType.EXTRA_EXTRA_TALL);
     public static final ItemEasel ITEM_EASEL = new ItemEasel(new Item.Properties().stacksTo(1));
+
+    public static ItemCanvas canvasItemFor(CanvasType type) {
+        return switch (type) {
+            case SMALL -> ITEM_CANVAS;
+            case LARGE -> ITEM_CANVAS_LARGE;
+            case LONG -> ITEM_CANVAS_LONG;
+            case TALL -> ITEM_CANVAS_TALL;
+            case EXTRA_LARGE -> ITEM_CANVAS_EXTRA_LARGE;
+            case EXTRA_EXTRA_LARGE -> ITEM_CANVAS_EXTRA_EXTRA_LARGE;
+            case EXTRA_LONG -> ITEM_CANVAS_EXTRA_LONG;
+            case EXTRA_EXTRA_LONG -> ITEM_CANVAS_EXTRA_EXTRA_LONG;
+            case EXTRA_TALL -> ITEM_CANVAS_EXTRA_TALL;
+            case EXTRA_EXTRA_TALL -> ITEM_CANVAS_EXTRA_EXTRA_TALL;
+        };
+    }
 
     public static final RecipeSerializer<RecipeCraftPalette> CRAFTING_SPECIAL_PALETTE_CRAFTING = new SimpleCraftingRecipeSerializer<>(RecipeCraftPalette::new);
     public static final RecipeSerializer<RecipeFillPalette> CRAFTING_SPECIAL_PALETTE_FILLING = new SimpleCraftingRecipeSerializer<>(RecipeFillPalette::new);
@@ -42,6 +63,7 @@ public final class Items {
     public static final DataComponentType<String> CANVAS_ID = DataComponentType.<String>builder().persistent(ExtraCodecs.NON_EMPTY_STRING).networkSynchronized(ByteBufCodecs.STRING_UTF8).build();
     public static final DataComponentType<String> CANVAS_TITLE = DataComponentType.<String>builder().persistent(Codec.STRING).build();
     public static final DataComponentType<String> CANVAS_AUTHOR = DataComponentType.<String>builder().persistent(Codec.STRING).build();
+    public static final DataComponentType<String> CANVAS_DATE = DataComponentType.<String>builder().persistent(Codec.STRING).build();
     public static final DataComponentType<Integer> CANVAS_GENERATION = DataComponentType.<Integer>builder().persistent(ExtraCodecs.NON_NEGATIVE_INT).build();
     public static final DataComponentType<byte[]> PALETTE_BASIC_COLORS = DataComponentType.<byte[]>builder().persistent(Codec.BYTE_BUFFER.flatXmap(byteBuffer -> DataResult.success(byteBuffer.array()), bytes -> DataResult.success(ByteBuffer.wrap(bytes)))).networkSynchronized(ByteBufCodecs.BYTE_ARRAY).build();
     public static final DataComponentType<ItemPalette.ComponentCustomColor> PALETTE_CUSTOM_COLORS = DataComponentType.<ItemPalette.ComponentCustomColor>builder().persistent(ItemPalette.ComponentCustomColor.CODEC).build();
@@ -60,10 +82,23 @@ public final class Items {
                 output.accept(ITEM_CANVAS_LONG);
                 output.accept(ITEM_CANVAS_TALL);
                 output.accept(ITEM_CANVAS_LARGE);
+                output.accept(ITEM_CANVAS_EXTRA_LARGE);
+                output.accept(ITEM_CANVAS_EXTRA_EXTRA_LARGE);
+                output.accept(ITEM_CANVAS_EXTRA_LONG);
+                output.accept(ITEM_CANVAS_EXTRA_EXTRA_LONG);
+                output.accept(ITEM_CANVAS_EXTRA_TALL);
+                output.accept(ITEM_CANVAS_EXTRA_EXTRA_TALL);
                 output.accept(ITEM_EASEL);
             })
             .title(Component.translatable("itemGroup.xercapaint.paint_tab"))
             .build();
+
+    /** True for any of this mod's items (canvases, easel, palette). Used to keep them away from
+     *  vanilla players who shouldn't be able to see or pick up modded content. */
+    public static boolean isPaintItem(ItemStack stack) {
+        Item item = stack.getItem();
+        return item instanceof ItemCanvas || item instanceof ItemEasel || item instanceof ItemPalette;
+    }
 
     public static void registerRecipes() {
         registerRecipeSerializer("crafting_special_palette_crafting", CRAFTING_SPECIAL_PALETTE_CRAFTING);
@@ -78,6 +113,12 @@ public final class Items {
         registerItem("item_canvas_large", ITEM_CANVAS_LARGE);
         registerItem("item_canvas_long", ITEM_CANVAS_LONG);
         registerItem("item_canvas_tall", ITEM_CANVAS_TALL);
+        registerItem("item_canvas_extra_large", ITEM_CANVAS_EXTRA_LARGE);
+        registerItem("item_canvas_extra_extra_large", ITEM_CANVAS_EXTRA_EXTRA_LARGE);
+        registerItem("item_canvas_extra_long", ITEM_CANVAS_EXTRA_LONG);
+        registerItem("item_canvas_extra_extra_long", ITEM_CANVAS_EXTRA_EXTRA_LONG);
+        registerItem("item_canvas_extra_tall", ITEM_CANVAS_EXTRA_TALL);
+        registerItem("item_canvas_extra_extra_tall", ITEM_CANVAS_EXTRA_EXTRA_TALL);
         registerItem("item_easel", ITEM_EASEL);
 
         Registry.register(BuiltInRegistries.CREATIVE_MODE_TAB, Mod.id("paint_tab"), PAINT_TAB);
@@ -89,6 +130,7 @@ public final class Items {
         registerComponentType("canvas_id", CANVAS_ID);
         registerComponentType("canvas_title", CANVAS_TITLE);
         registerComponentType("canvas_author", CANVAS_AUTHOR);
+        registerComponentType("canvas_date", CANVAS_DATE);
         registerComponentType("canvas_pixels", CANVAS_PIXELS);
         registerComponentType("palette_basic_colors", PALETTE_BASIC_COLORS);
         registerComponentType("palette_custom_colors", PALETTE_CUSTOM_COLORS);
