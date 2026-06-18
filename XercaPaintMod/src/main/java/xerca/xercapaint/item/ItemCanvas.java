@@ -1,6 +1,5 @@
 package xerca.xercapaint.item;
 
-import dev.delta.deltamod.ditto.DittoItem;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -27,7 +26,7 @@ import javax.annotation.Nullable;
 import java.util.List;
 
 @NonnullDefault
-public class ItemCanvas extends HangingEntityItem implements DittoItem {
+public class ItemCanvas extends HangingEntityItem {
     private static final int ORIGINAL_GENERATION = 1;
     private static final int COPY_GENERATION = 3;
     private final CanvasType canvasType;
@@ -35,17 +34,6 @@ public class ItemCanvas extends HangingEntityItem implements DittoItem {
     ItemCanvas(CanvasType canvasType) {
         super(Entities.CANVAS, new Item.Properties().stacksTo(1));
         this.canvasType = canvasType;
-    }
-
-    // ditto: what a non-Delta-client (vanilla) player sees in place of this modded item.
-    @Override
-    public ItemStack getVanillaItemStack(ItemStack stack) {
-        return new ItemStack(net.minecraft.world.item.Items.PAPER, stack.getCount());
-    }
-
-    @Override
-    public Item getVanillaItem() {
-        return net.minecraft.world.item.Items.PAPER;
     }
 
     @Override

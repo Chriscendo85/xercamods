@@ -1,0 +1,13 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "xerca.xercapaint.mixin.ditto",
+  "compatibilityLevel": "JAVA_21",
+  "plugin": "xerca.xercapaint.compat.DittoMixinPlugin",
+  "mixins": [
+    "ItemDittoMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

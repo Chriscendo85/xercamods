@@ -20,13 +20,13 @@
     ]
   },
   "mixins": [
-    "xercapaint.mixins.json"
+    "xercapaint.mixins.json",
+    "xercapaint.ditto.mixins.json"
   ],
   "accessWidener": "xercapaint.accesswidener",
   "depends": {
     "fabricloader": "*",
     "fabric-api": "*",
-    "minecraft": "1.21.1",
-    "delta": "*"
+    "minecraft": "1.21.1"
   }
 }

@@ -1,6 +1,5 @@
 package xerca.xercapaint.item;
 
-import dev.delta.deltamod.ditto.DittoItem;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -24,21 +23,10 @@ import xerca.xercapaint.entity.EntityEasel;
 
 import java.util.function.Consumer;
 
-public class ItemEasel extends Item implements DittoItem {
+public class ItemEasel extends Item {
 
     public ItemEasel(Properties properties) {
         super(properties);
-    }
-
-    // ditto: what a non-Delta-client (vanilla) player sees in place of this modded item.
-    @Override
-    public ItemStack getVanillaItemStack(ItemStack stack) {
-        return new ItemStack(net.minecraft.world.item.Items.STICK, stack.getCount());
-    }
-
-    @Override
-    public Item getVanillaItem() {
-        return net.minecraft.world.item.Items.STICK;
     }
 
     @Override
