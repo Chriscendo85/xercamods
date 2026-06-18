@@ -69,6 +69,9 @@ public class GuiCanvasEdit extends BasePalette {
     private boolean freshOpen = true;
     private boolean middlePanning = false;
     private boolean spacePanning = false;
+    private boolean ctrlTapPending = false;
+    private static final long PAN_PAINT_GRACE_MS = 200;
+    private long paintGraceUntil = 0;
     private Button buttonSign;
     private Button buttonCancel;
     private Button buttonFinalize;
@@ -590,6 +593,8 @@ public class GuiCanvasEdit extends BasePalette {
             }
             return true;
         } else {
+            // Track a "tap" of Ctrl on its own (no other key) so Ctrl+Z stays undo-only.
+            ctrlTapPending = keyCode == GLFW_KEY_LEFT_CONTROL || keyCode == GLFW_KEY_RIGHT_CONTROL;
             if (keyCode == GLFW_KEY_SPACE) {
                 spacePanning = true;
                 return true;
@@ -618,10 +623,28 @@ public class GuiCanvasEdit extends BasePalette {
     @Override
     public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
         if (keyCode == GLFW_KEY_SPACE) {
+            if (spacePanning) {
+                // Brief grace so a still-held left button doesn't instantly paint after panning.
+                paintGraceUntil = System.currentTimeMillis() + PAN_PAINT_GRACE_MS;
+            }
             spacePanning = false;
             return true;
         }
+        if ((keyCode == GLFW_KEY_LEFT_CONTROL || keyCode == GLFW_KEY_RIGHT_CONTROL) && ctrlTapPending && !gettingSigned) {
+            ctrlTapPending = false;
+            toggleColorPicker();
+            return true;
+        }
         return super.keyReleased(keyCode, scanCode, modifiers);
+    }
+
+    private void toggleColorPicker() {
+        if (isPickingColor) {
+            isPickingColor = false;
+        } else {
+            setPickingColor();
+            playSound(SoundEvents.COLOR_PICKER);
+        }
     }
 
     private static boolean isAllowedChatCharacter(char var0) {
@@ -685,6 +708,9 @@ public class GuiCanvasEdit extends BasePalette {
             return true;
         }
         if (middlePanning || spacePanning) {
+            // A left click here is swallowed for panning; clear the stroke flag so painting that resumes
+            // afterwards (still holding left after a space-pan) pushes its own undo snapshot.
+            undoStarted = false;
             return true;
         }
 
@@ -710,7 +736,8 @@ public class GuiCanvasEdit extends BasePalette {
                 int y = (mouseY - (int) canvasY) / canvasPixelScale;
                 if (x >= 0 && y >= 0 && x < canvasPixelWidth && y < canvasPixelHeight) {
                     int color = getPixelAt(x, y);
-                    carriedColor = new PaletteUtil.Color(color);
+                    // Picking immediately selects the colour (and still carries it so it can be dropped on a slot).
+                    carriedColor = currentColor = new PaletteUtil.Color(color);
                     setCarryingColor();
                     playSound(SoundEvents.COLOR_PICKER_SUCK);
                 }
@@ -807,9 +834,23 @@ public class GuiCanvasEdit extends BasePalette {
             return true;
         }
         if (!isCarryingColor && !isCarryingWater && !isPickingColor && !isCarryingPalette && !isCarryingCanvas && !isFilling) {
+            if (System.currentTimeMillis() < paintGraceUntil) {
+                // Grace period right after a space-pan: don't paint with the still-held left button.
+                return true;
+            }
             int mouseX = (int) Math.floor(posX);
             int mouseY = (int) Math.floor(posY);
             if (inCanvas(mouseX, mouseY)) {
+                if (!undoStarted) {
+                    // Painting resumed without a fresh click (e.g. still holding left after a space-pan);
+                    // snapshot now so this stroke can be undone.
+                    undoStarted = true;
+                    touchedCanvas = false;
+                    if (undoStack.size() >= MAX_UNDO_LENGTH) {
+                        undoStack.removeLast();
+                    }
+                    undoStack.push(pixels.clone());
+                }
                 clickedCanvas(mouseX, mouseY, mouseButton);
             }
 
