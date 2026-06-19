@@ -86,7 +86,15 @@ public class RenderEntityEasel extends EntityRenderer<EntityEasel> implements Re
     @Override
     protected void renderNameTag(EntityEasel easel, Component displayName, PoseStack poseStack, MultiBufferSource bufferSource, int packedLight, float partialTick) {
         poseStack.pushPose();
-        poseStack.translate(0, -0.5, 0);
+        // Taller canvases grow upward on the easel, so a fixed offset ends up in the middle of the
+        // painting. Raise the label by the extra canvas height (~0.585 blocks of world height per
+        // canvas block); 1- and 2-tall canvases keep their original placement.
+        double lift = -0.5;
+        if (easel.getItem().getItem() instanceof ItemCanvas canvas) {
+            float hScale = canvas.getHeight() / 16.0f;
+            lift += Math.max(0.0f, hScale - 2.0f) * 0.585f;
+        }
+        poseStack.translate(0, lift, 0);
         super.renderNameTag(easel, ItemCanvas.getFullLabel(easel.getItem()), poseStack, bufferSource, packedLight, partialTick);
         poseStack.popPose();
     }

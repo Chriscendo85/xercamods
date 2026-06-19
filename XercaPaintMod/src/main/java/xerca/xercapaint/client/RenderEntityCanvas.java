@@ -59,7 +59,7 @@ public class RenderEntityCanvas extends EntityRenderer<EntityCanvas> {
     @Override
     public void render(EntityCanvas entity, float entityYaw, float partialTicks, PoseStack matrixStackIn, MultiBufferSource bufferIn, int packedLightIn) {
         super.render(entity, entityYaw, partialTicks, matrixStackIn, bufferIn, packedLightIn);
-        getCanvasRendererInstance(entity).render(entity, entityYaw, entity.getXRot(), matrixStackIn, bufferIn, entity.getDirection(), packedLightIn);
+        getCanvasRendererInstance(entity).render(entity, entityYaw, entity.getXRot(), matrixStackIn, bufferIn, entity.getDirection(), packedLightIn, false);
     }
 
     public static class RenderEntityCanvasFactory implements EntityRendererProvider<EntityCanvas> {
@@ -163,7 +163,7 @@ public class RenderEntityCanvas extends EntityRenderer<EntityCanvas> {
             }
         }
 
-        public void render(@Nullable EntityCanvas canvas, float yaw, float pitch, PoseStack ms, MultiBufferSource buffer, Direction facing, int packedLight) {
+        public void render(@Nullable EntityCanvas canvas, float yaw, float pitch, PoseStack ms, MultiBufferSource buffer, Direction facing, int packedLight, boolean guiNormalize) {
             final float wScale = width / 16.0f;
             final float hScale = height / 16.0f;
 
@@ -192,6 +192,11 @@ public class RenderEntityCanvas extends EntityRenderer<EntityCanvas> {
                 ms.translate(0.75d, 0.5d, 0.5d);
                 if (wScale > 1 || hScale > 1) {
                     f /= 3.3f;
+                    if (guiNormalize) {
+                        // Cap the longest side at the 2-block footprint so 3x/4x canvases fit one slot
+                        // (and share the centering already tuned for the 2x models they reuse).
+                        f *= 2.0f / Math.max(wScale, hScale);
+                    }
                 } else {
                     f /= 2.0f;
                 }

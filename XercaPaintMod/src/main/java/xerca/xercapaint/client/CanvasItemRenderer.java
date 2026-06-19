@@ -35,17 +35,20 @@ public class CanvasItemRenderer extends BlockEntityWithoutLevelRenderer implemen
     @Override
     public void renderByItem(ItemStack stack, ItemDisplayContext displayContext, PoseStack matrixStack, MultiBufferSource buffer, int combinedLight, int combinedOverlay) {
         if (stack.getItem() instanceof ItemCanvas itemCanvas) {
+            // Only shrink oversized canvases down to a single slot in inventory/hotbar (GUI).
+            // The easel reuses this renderer through the FIXED context and wants the full size.
+            boolean guiNormalize = displayContext == ItemDisplayContext.GUI;
             boolean rendered = false;
             if (stack.get(Items.CANVAS_PIXELS) != null && RenderEntityCanvas.theInstance != null) {
                 RenderEntityCanvas.Instance canvasIns = RenderEntityCanvas.theInstance.getCanvasRendererInstance(stack, itemCanvas.getWidth(), itemCanvas.getHeight());
                 if (canvasIns != null) {
-                    canvasIns.render(null, 0, 0, matrixStack, buffer, Direction.UP, combinedLight);
+                    canvasIns.render(null, 0, 0, matrixStack, buffer, Direction.UP, combinedLight, guiNormalize);
                     rendered = true;
                 }
             }
 
             if (!rendered) {
-                renderEmptyCanvas(matrixStack, buffer, itemCanvas.getWidth(), itemCanvas.getHeight(), combinedLight);
+                renderEmptyCanvas(matrixStack, buffer, itemCanvas.getWidth(), itemCanvas.getHeight(), combinedLight, guiNormalize);
             }
         }
     }
@@ -54,7 +57,7 @@ public class CanvasItemRenderer extends BlockEntityWithoutLevelRenderer implemen
         vb.addVertex(m, (float) x, (float) y, (float) z).setColor(255, 255, 255, 255).setUv(tx, ty).setOverlay(OverlayTexture.NO_OVERLAY).setLight(lightmap).setNormal(pose, xOff, yOff, zOff);
     }
 
-    private void renderEmptyCanvas(PoseStack ms, MultiBufferSource buffer, float width, float height, int packedLight) {
+    private void renderEmptyCanvas(PoseStack ms, MultiBufferSource buffer, float width, float height, int packedLight, boolean guiNormalize) {
         final float wScale = width / 16.0f;
         final float hScale = height / 16.0f;
 
@@ -71,6 +74,11 @@ public class CanvasItemRenderer extends BlockEntityWithoutLevelRenderer implemen
         ms.translate(0.75, 0.5, 0.5);
         if (wScale > 1 || hScale > 1) {
             f /= 3.3f;
+            if (guiNormalize) {
+                // Cap the longest side at the 2-block footprint so 3x/4x canvases fit one slot
+                // (and share the centering already tuned for the 2x models they reuse).
+                f *= 2.0f / Math.max(wScale, hScale);
+            }
         } else {
             f /= 2.0f;
         }
