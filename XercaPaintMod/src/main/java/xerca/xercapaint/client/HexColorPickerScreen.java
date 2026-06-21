@@ -58,6 +58,9 @@ public class HexColorPickerScreen extends Screen {
     private final int prevH = 16;
 
     private EditBox hexField;
+    private EditBox hueField;
+    private EditBox satField;
+    private EditBox briField;
     private Button addButton;
     private Button cancelButton;
     private boolean syncingFields = false;
@@ -88,18 +91,29 @@ public class HexColorPickerScreen extends Screen {
         sqY = panelY + 34;
         barY = sqY;
         hueX = sqX + sqW + 8;
-        satX = hueX + barW + 8;
-        briX = satX + barW + 8;
+        satX = hueX + barW + 10;
+        briX = satX + barW + 10;
 
-        int hexFieldY = sqY + sqH + 8;
-        prevX = sqX + 114;
-        prevY = hexFieldY - 1;
+        // Editable H/S/B value fields directly under their bars. Borderless so 3-digit values
+        // (e.g. "360" / "100%") fit in the narrow columns.
+        int valuesY = sqY + sqH + 4;
+        final int valueW = 24;
+        final int valueH = 10;
+        hueField = makeValueField(hueX + barW / 2 - valueW / 2, valuesY, valueW, valueH, BAR_HUE);
+        satField = makeValueField(satX + barW / 2 - valueW / 2, valuesY, valueW, valueH, BAR_SAT);
+        briField = makeValueField(briX + barW / 2 - valueW / 2, valuesY, valueW, valueH, BAR_BRI);
 
-        hexField = new EditBox(this.font, sqX + 28, hexFieldY, 78, 14, Component.translatable("palette.hexPicker.hex"));
+        int hexFieldY = sqY + sqH + 4;
+        // Line the hex field up with the picker square: its right edge meets the square's.
+        hexField = new EditBox(this.font, sqX + 22, hexFieldY, sqW - 22, 14, Component.translatable("palette.hexPicker.hex"));
         hexField.setMaxLength(9);
         hexField.setHint(Component.literal("#RRGGBB"));
         hexField.setResponder(this::onHexTyped);
         addRenderableWidget(hexField);
+
+        // Colour preview, moved down below the hex / value row.
+        prevX = sqX + 114;
+        prevY = hexFieldY + 20;
 
         int buttonsY = panelY + panelH - 26;
         addButton = addRenderableWidget(Button.builder(Component.translatable("palette.hexPicker.add"), b -> {
@@ -109,7 +123,17 @@ public class HexColorPickerScreen extends Screen {
         cancelButton = addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), b -> returnToParent())
                 .bounds(panelX + 122, buttonsY, 52, 20).build());
 
-        syncHexField();
+        syncFields();
+    }
+
+    private EditBox makeValueField(int x, int y, int w, int h, int type) {
+        EditBox box = new EditBox(this.font, x, y, w, h, Component.empty());
+        box.setBordered(false);
+        box.setMaxLength(4);
+        box.setTextColor(0xFFFFFFFF);
+        box.setResponder(s -> onHsbTyped(type, s));
+        addRenderableWidget(box);
+        return box;
     }
 
     private void returnToParent() {
@@ -142,13 +166,16 @@ public class HexColorPickerScreen extends Screen {
         drawBar(g, satX, BAR_SAT, 1.0f - saturation);
         drawBar(g, briX, BAR_BRI, 1.0f - brightness);
 
-        // Hex label + preview swatch (to the right of the hex field)
+        // Hex label + preview swatch
         g.drawString(this.font, Component.translatable("palette.hexPicker.hex"), sqX, hexField.getY() + 3, LABEL_COLOR, false);
         g.fill(prevX - 1, prevY - 1, prevX + prevW + 1, prevY + prevH + 1, PANEL_BORDER);
         g.fill(prevX, prevY, prevX + prevW, prevY + prevH, currentColor().rgbVal());
 
-        // Widgets (hex field + buttons) on top of the panel
+        // Widgets (hex field + value fields + buttons) on top of the panel
         hexField.render(g, mouseX, mouseY, partialTick);
+        renderValueField(g, hueField, hueX, mouseX, mouseY, partialTick);
+        renderValueField(g, satField, satX, mouseX, mouseY, partialTick);
+        renderValueField(g, briField, briX, mouseX, mouseY, partialTick);
         addButton.render(g, mouseX, mouseY, partialTick);
         cancelButton.render(g, mouseX, mouseY, partialTick);
     }
@@ -208,6 +235,12 @@ public class HexColorPickerScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
+        // Clicking anything that isn't a text field drops input focus, so the caret disappears and
+        // the H/S/B values snap back to centered.
+        if (!inField(mx, my, hexField) && !inField(mx, my, hueField)
+                && !inField(mx, my, satField) && !inField(mx, my, briField)) {
+            clearTextFocus();
+        }
         if (button == 0) {
             if (inRect(mx, my, sqX, sqY, sqW, sqH)) {
                 dragging = 1;
@@ -253,7 +286,7 @@ public class HexColorPickerScreen extends Screen {
     private void updateSatVal(double mx, double my) {
         saturation = clamp01((float) (mx - sqX) / (sqW - 1));
         brightness = clamp01(1.0f - (float) (my - sqY) / (sqH - 1));
-        syncHexField();
+        syncFields();
     }
 
     private void updateBar(int type, double my) {
@@ -264,7 +297,7 @@ public class HexColorPickerScreen extends Screen {
             case BAR_BRI -> brightness = 1.0f - frac;
             default -> { }
         }
-        syncHexField();
+        syncFields();
     }
 
     private void onHexTyped(String input) {
@@ -298,12 +331,55 @@ public class HexColorPickerScreen extends Screen {
             saturation = hsb[1];
             brightness = hsb[2];
             hexField.setTextColor(0xFFFFFFFF);
+            updateHsbFieldsText();
         } catch (NumberFormatException e) {
             hexField.setTextColor(0xFFFF5555);
         }
     }
 
-    private void syncHexField() {
+    // Handle typing in one of the H/S/B value fields. H is 0-360 degrees, S/V are 0-100 percent.
+    private void onHsbTyped(int type, String input) {
+        if (syncingFields) {
+            return;
+        }
+        String digits = input.replaceAll("[^0-9]", "");
+        if (digits.isEmpty()) {
+            return;
+        }
+        int v;
+        try {
+            v = Integer.parseInt(digits);
+        } catch (NumberFormatException e) {
+            return;
+        }
+        switch (type) {
+            case BAR_HUE -> hue = clamp01(v / 360.0f);
+            case BAR_SAT -> saturation = clamp01(v / 100.0f);
+            case BAR_BRI -> brightness = clamp01(v / 100.0f);
+            default -> { }
+        }
+        // The other two HSB values are unchanged; just reflect the new colour in the hex field.
+        if (hexField != null) {
+            syncingFields = true;
+            PaletteUtil.Color c = currentColor();
+            hexField.setValue(String.format("#%02X%02X%02X", c.r, c.g, c.b));
+            hexField.setTextColor(0xFFFFFFFF);
+            syncingFields = false;
+        }
+    }
+
+    // EditBox can't center its own text, so draw the value centered under its bar when idle and
+    // only hand off to the (left-aligned) EditBox while it's focused for typing.
+    private void renderValueField(GuiGraphics g, EditBox box, int barX, int mouseX, int mouseY, float partialTick) {
+        if (box.isFocused()) {
+            box.render(g, mouseX, mouseY, partialTick);
+        } else {
+            g.drawCenteredString(this.font, box.getValue(), barX + barW / 2, box.getY() + 1, 0xFFFFFFFF);
+        }
+    }
+
+    // Refresh every field (hex + H/S/B) from the current colour. Used after slider/square edits.
+    private void syncFields() {
         if (hexField == null) {
             return;
         }
@@ -311,7 +387,24 @@ public class HexColorPickerScreen extends Screen {
         PaletteUtil.Color c = currentColor();
         hexField.setValue(String.format("#%02X%02X%02X", c.r, c.g, c.b));
         hexField.setTextColor(0xFFFFFFFF);
+        setHsbFieldText();
         syncingFields = false;
+    }
+
+    // Refresh just the H/S/B fields (used after a hex edit, so the hex field keeps its caret).
+    private void updateHsbFieldsText() {
+        if (hueField == null) {
+            return;
+        }
+        syncingFields = true;
+        setHsbFieldText();
+        syncingFields = false;
+    }
+
+    private void setHsbFieldText() {
+        hueField.setValue(Integer.toString(Math.round(hue * 360.0f)));
+        satField.setValue(Math.round(saturation * 100.0f) + "%");
+        briField.setValue(Math.round(brightness * 100.0f) + "%");
     }
 
     private PaletteUtil.Color currentColor() {
@@ -322,6 +415,18 @@ public class HexColorPickerScreen extends Screen {
 
     private boolean inRect(double mx, double my, int x, int y, int w, int h) {
         return mx >= x && mx < x + w && my >= y && my < y + h;
+    }
+
+    private boolean inField(double mx, double my, EditBox box) {
+        return box != null && inRect(mx, my, box.getX(), box.getY(), box.getWidth(), box.getHeight());
+    }
+
+    private void clearTextFocus() {
+        setFocused(null);
+        if (hexField != null) hexField.setFocused(false);
+        if (hueField != null) hueField.setFocused(false);
+        if (satField != null) satField.setFocused(false);
+        if (briField != null) briField.setFocused(false);
     }
 
     private static float clamp01(float v) {
