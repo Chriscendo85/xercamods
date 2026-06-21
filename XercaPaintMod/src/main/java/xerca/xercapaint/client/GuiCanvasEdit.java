@@ -34,6 +34,8 @@ import static org.lwjgl.glfw.GLFW.*;
 @net.fabricmc.api.Environment(net.fabricmc.api.EnvType.CLIENT)
 public class GuiCanvasEdit extends BasePalette {
     private static final int BRUSH_LEVEL_COUNT = 4;
+    // Selectable brush sizes (scroll wheel / brush meter). Opacity still has BRUSH_LEVEL_COUNT levels.
+    private static final int BRUSH_SIZE_COUNT = 6;
     private static final int SMALL_CANVAS_PIXEL_SCALE = 10;
     private static final int MAX_TITLE_LENGTH = 16;
     private static final int MAX_EASEL_DISTANCE_SQR = 64;
@@ -76,12 +78,16 @@ public class GuiCanvasEdit extends BasePalette {
     private Button buttonCancel;
     private Button buttonFinalize;
     private Button buttonCenter;
+    private Button buttonGrid;
     private int updateCount;
     private BrushSound brushSound = null;
     private static final int CANVAS_HOLDER_HEIGHT = 10;
     private int brushOpacitySetting = 0;
     private static final float[] BRUSH_OPACITIES = {1.f, 0.75f, 0.5f, 0.25f};
     private static boolean showHelp = false;
+    // Purely a visual painting aid: draws a black grid around each pixel. Never written to the
+    // saved pixel data, so it doesn't appear on the finished painting.
+    private boolean showGrid = false;
     private final Set<Integer> draggedPoints = new HashSet<>();
 
     private final Player editingPlayer;
@@ -116,8 +122,12 @@ public class GuiCanvasEdit extends BasePalette {
     private static final int[][] BRUSH_SHAPE_1 = {{0, 0}, {-1, 0}, {0, -1}, {-1, -1}};
     private static final int[][] BRUSH_SHAPE_2 = {{-1, 1}, {0, 1}, {-2, 0}, {-1, 0}, {0, 0}, {1, 0}, {-2, -1}, {-1, -1}, {0, -1}, {1, -1}, {-1, -2}, {0, -2}};
     private static final int[][] BRUSH_SHAPE_3 = {{-1, 2}, {0, 2}, {1, 2}, {-2, 1}, {-1, 1}, {0, 1}, {1, 1}, {2, 1}, {-2, 0}, {-1, 0}, {0, 0}, {1, 0}, {2, 0}, {-2, -1}, {-1, -1}, {0, -1}, {1, -1}, {2, -1}, {-1, -2}, {0, -2}, {1, -2}};
-    private static final int[][][] BRUSH_SHAPES = {BRUSH_SHAPE_0, BRUSH_SHAPE_1, BRUSH_SHAPE_2, BRUSH_SHAPE_3};
-    private static final boolean[] BRUSH_HALF = {false, true, true, false};
+    // 6-wide rounded dab (even width, so half-anchored like sizes 1 and 2).
+    private static final int[][] BRUSH_SHAPE_4 = {{-1, -3}, {0, -3}, {-2, -2}, {-1, -2}, {0, -2}, {1, -2}, {-3, -1}, {-2, -1}, {-1, -1}, {0, -1}, {1, -1}, {2, -1}, {-3, 0}, {-2, 0}, {-1, 0}, {0, 0}, {1, 0}, {2, 0}, {-2, 1}, {-1, 1}, {0, 1}, {1, 1}, {-1, 2}, {0, 2}};
+    // 7-wide rounded dab (odd width, exact-anchored like sizes 0 and 3).
+    private static final int[][] BRUSH_SHAPE_5 = {{-1, -3}, {0, -3}, {1, -3}, {-2, -2}, {-1, -2}, {0, -2}, {1, -2}, {2, -2}, {-3, -1}, {-2, -1}, {-1, -1}, {0, -1}, {1, -1}, {2, -1}, {3, -1}, {-3, 0}, {-2, 0}, {-1, 0}, {0, 0}, {1, 0}, {2, 0}, {3, 0}, {-3, 1}, {-2, 1}, {-1, 1}, {0, 1}, {1, 1}, {2, 1}, {3, 1}, {-2, 2}, {-1, 2}, {0, 2}, {1, 2}, {2, 2}, {-1, 3}, {0, 3}, {1, 3}};
+    private static final int[][][] BRUSH_SHAPES = {BRUSH_SHAPE_0, BRUSH_SHAPE_1, BRUSH_SHAPE_2, BRUSH_SHAPE_3, BRUSH_SHAPE_4, BRUSH_SHAPE_5};
+    private static final boolean[] BRUSH_HALF = {false, true, true, false, true, false};
 
     private static final int MAX_UNDO_LENGTH = 16;
     private final Deque<int[]> undoStack = new ArrayDeque<>(MAX_UNDO_LENGTH);
@@ -202,6 +212,11 @@ public class GuiCanvasEdit extends BasePalette {
             updateCanvasPos(0, 0);
             updatePalettePos(0, 0);
         }).bounds(x - 64, y, 60, 20).build());
+        // Toggle the pixel grid overlay (visual guide only). Fixed screen position, left of "Center".
+        this.buttonGrid = this.addRenderableWidget(Button.builder(Component.translatable("canvas.gridButton"), button -> {
+            showGrid = !showGrid;
+        }).bounds(x - 128, y, 60, 20).build());
+        this.buttonGrid.setTooltip(Tooltip.create(Component.translatable("canvas.gridButton.tooltip")));
         this.buttonFinalize = this.addRenderableWidget(Button.builder(Component.translatable("canvas.finalizeButton"), button -> {
             if (!isSigned) {
                 canvasDirty = true;
@@ -233,6 +248,7 @@ public class GuiCanvasEdit extends BasePalette {
     private void updateButtons() {
         if (!this.isSigned) {
             this.buttonCenter.visible = !this.gettingSigned;
+            this.buttonGrid.visible = !this.gettingSigned;
             this.buttonSign.visible = !this.gettingSigned;
             this.buttonCancel.visible = this.gettingSigned;
             this.buttonFinalize.visible = this.gettingSigned;
@@ -254,69 +270,17 @@ public class GuiCanvasEdit extends BasePalette {
         }
     }
 
-    @SuppressWarnings("PointlessArithmeticExpression")
     private void setPixelsAt(int mouseX, int mouseY, PaletteUtil.Color color, int brushSize, float opacity) {
-        int x;
-        int y;
+        if (brushSize < 0 || brushSize >= BRUSH_SHAPES.length) {
+            return;
+        }
+        // Anchor exactly like drawBrushShapeOutline so the painted dab matches the on-screen outline.
         final int pixelHalf = canvasPixelScale / 2;
-        switch (brushSize) {
-            case 0 -> {
-                x = (mouseX - (int) canvasX) / canvasPixelScale;
-                y = (mouseY - (int) canvasY) / canvasPixelScale;
-                setPixelAt(x, y, color, opacity);
-            }
-            case 1 -> {
-                x = (mouseX - (int) canvasX + pixelHalf) / canvasPixelScale;
-                y = (mouseY - (int) canvasY + pixelHalf) / canvasPixelScale;
-                setPixelAt(x, y, color, opacity);
-                setPixelAt(x - 1, y, color, opacity);
-                setPixelAt(x, y - 1, color, opacity);
-                setPixelAt(x - 1, y - 1, color, opacity);
-            }
-            case 2 -> {
-                x = (mouseX - (int) canvasX + pixelHalf) / canvasPixelScale;
-                y = (mouseY - (int) canvasY + pixelHalf) / canvasPixelScale;
-                setPixelAt(x - 1, y + 1, color, opacity);
-                setPixelAt(x, y + 1, color, opacity);
-                setPixelAt(x - 2, y, color, opacity);
-                setPixelAt(x - 1, y, color, opacity);
-                setPixelAt(x, y, color, opacity);
-                setPixelAt(x + 1, y, color, opacity);
-                setPixelAt(x - 2, y - 1, color, opacity);
-                setPixelAt(x - 1, y - 1, color, opacity);
-                setPixelAt(x, y - 1, color, opacity);
-                setPixelAt(x + 1, y - 1, color, opacity);
-                setPixelAt(x - 1, y - 2, color, opacity);
-                setPixelAt(x, y - 2, color, opacity);
-            }
-            case 3 -> {
-                x = (mouseX - (int) canvasX) / canvasPixelScale;
-                y = (mouseY - (int) canvasY) / canvasPixelScale;
-                setPixelAt(x - 1, y + 2, color, opacity);
-                setPixelAt(x + 0, y + 2, color, opacity);
-                setPixelAt(x + 1, y + 2, color, opacity);
-                setPixelAt(x - 2, y + 1, color, opacity);
-                setPixelAt(x - 1, y + 1, color, opacity);
-                setPixelAt(x + 0, y + 1, color, opacity);
-                setPixelAt(x + 1, y + 1, color, opacity);
-                setPixelAt(x + 2, y + 1, color, opacity);
-                setPixelAt(x - 2, y, color, opacity);
-                setPixelAt(x - 1, y, color, opacity);
-                setPixelAt(x + 0, y, color, opacity);
-                setPixelAt(x + 1, y, color, opacity);
-                setPixelAt(x + 2, y, color, opacity);
-                setPixelAt(x - 2, y - 1, color, opacity);
-                setPixelAt(x - 1, y - 1, color, opacity);
-                setPixelAt(x + 0, y - 1, color, opacity);
-                setPixelAt(x + 1, y - 1, color, opacity);
-                setPixelAt(x + 2, y - 1, color, opacity);
-                setPixelAt(x - 1, y - 2, color, opacity);
-                setPixelAt(x + 0, y - 2, color, opacity);
-                setPixelAt(x + 1, y - 2, color, opacity);
-            }
-            default -> {
-                // Ignore unsupported brush sizes.
-            }
+        final int adjust = BRUSH_HALF[brushSize] ? pixelHalf : 0;
+        final int x = (mouseX - (int) canvasX + adjust) / canvasPixelScale;
+        final int y = (mouseY - (int) canvasY + adjust) / canvasPixelScale;
+        for (int[] off : BRUSH_SHAPES[brushSize]) {
+            setPixelAt(x + off[0], y + off[1], color, opacity);
         }
     }
 
@@ -372,15 +336,46 @@ public class GuiCanvasEdit extends BasePalette {
             }
         }
 
+        // Draw the optional pixel grid on top. Purely a painting guide; it is never part of the
+        // saved pixel data, so it won't appear on the finished painting.
+        if (showGrid && !gettingSigned) {
+            final int gridColor = 0xFF000000;
+            final int centerColor = 0xFFFF0000;
+            final int left = (int) canvasX;
+            final int top = (int) canvasY;
+            final int right = left + canvasWidth;
+            final int bottom = top + canvasHeight;
+            // Black grid lines around every pixel.
+            for (int j = 0; j <= canvasPixelWidth; j++) {
+                int x = left + j * canvasPixelScale;
+                guiGraphics.fill(x, top, x + 1, bottom + 1, gridColor);
+            }
+            for (int i = 0; i <= canvasPixelHeight; i++) {
+                int y = top + i * canvasPixelScale;
+                guiGraphics.fill(left, y, right + 1, y + 1, gridColor);
+            }
+            // Red center axis lines drawn on top (every canvas dimension is even, so the centre
+            // falls exactly on a grid line).
+            int centerX = left + (canvasPixelWidth / 2) * canvasPixelScale;
+            int centerY = top + (canvasPixelHeight / 2) * canvasPixelScale;
+            guiGraphics.fill(centerX, top, centerX + 1, bottom + 1, centerColor);
+            guiGraphics.fill(left, centerY, right + 1, centerY + 1, centerColor);
+        }
+
         if (!gettingSigned) {
-            // Draw brush meter
-            for (int i = 0; i < 4; i++) {
+            // Draw brush meter (BRUSH_SIZE_COUNT sizes, largest at the top)
+            for (int i = 0; i < BRUSH_SIZE_COUNT; i++) {
                 int y = brushMeterY + i * BRUSH_SPRITE_SIZE;
                 guiGraphics.fill(brushMeterX, y, brushMeterX + 3, y + 3, currentColor.rgbVal());
             }
             RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
-            guiGraphics.blit(PALETTE_TEXTURES, brushMeterX, brushMeterY + (3 - brushSize) * BRUSH_SPRITE_SIZE, 15, 246, 10, 10);
-            guiGraphics.blit(PALETTE_TEXTURES, brushMeterX, brushMeterY, BRUSH_SPRITE_X, BRUSH_SPRITE_Y - BRUSH_SPRITE_SIZE * 3, BRUSH_SPRITE_SIZE, BRUSH_SPRITE_SIZE * 4);
+            guiGraphics.blit(PALETTE_TEXTURES, brushMeterX, brushMeterY + (BRUSH_SIZE_COUNT - 1 - brushSize) * BRUSH_SPRITE_SIZE, 15, 246, 10, 10);
+            // The texture only has icons for sizes 0-3, so the two largest reuse the size-3 icon.
+            for (int i = 0; i < BRUSH_SIZE_COUNT; i++) {
+                int size = BRUSH_SIZE_COUNT - 1 - i;
+                int iconY = BRUSH_SPRITE_Y - BRUSH_SPRITE_SIZE * Math.min(size, 3);
+                guiGraphics.blit(PALETTE_TEXTURES, brushMeterX, brushMeterY + i * BRUSH_SPRITE_SIZE, BRUSH_SPRITE_X, iconY, BRUSH_SPRITE_SIZE, BRUSH_SPRITE_SIZE);
+            }
 
             // Draw the bucket (fill) tool above the brush meter
             drawBucketTool(guiGraphics, mouseX, mouseY);
@@ -401,8 +396,8 @@ public class GuiCanvasEdit extends BasePalette {
                     guiGraphics.renderComponentTooltip(font, Arrays.asList(Component.literal("Fill tool"),
                             Component.literal("Click to toggle it on, then click the canvas to flood-fill a connected area with the current color. Right-click fills with white.").withStyle(ChatFormatting.GRAY)), mouseX, mouseY);
                 } else if (inBrushMeter(mouseX, mouseY)) {
-                    int selectedSize = 3 - (mouseY - brushMeterY) / BRUSH_SPRITE_SIZE;
-                    if (selectedSize <= 3 && selectedSize >= 0) {
+                    int selectedSize = (BRUSH_SIZE_COUNT - 1) - (mouseY - brushMeterY) / BRUSH_SPRITE_SIZE;
+                    if (selectedSize <= BRUSH_SIZE_COUNT - 1 && selectedSize >= 0) {
                         guiGraphics.renderTooltip(font, Component.literal("Brush size (" + (selectedSize + 1) + ")"), mouseX, mouseY);
                     }
                 } else if (inBrushOpacityMeter(mouseX, mouseY)) {
@@ -452,7 +447,8 @@ public class GuiCanvasEdit extends BasePalette {
             guiGraphics.fill(mouseX, mouseY, mouseX + 3, mouseY + 3, currentColor.rgbVal());
 
             RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
-            int trueBrushY = BRUSH_SPRITE_Y - BRUSH_SPRITE_SIZE * brushSize;
+            // Only sizes 0-3 have a baked icon; the two largest reuse the size-3 icon (the outline shows true size).
+            int trueBrushY = BRUSH_SPRITE_Y - BRUSH_SPRITE_SIZE * Math.min(brushSize, 3);
             guiGraphics.blit(PALETTE_TEXTURES, mouseX, mouseY, BRUSH_SPRITE_X, trueBrushY, BRUSH_SPRITE_SIZE, BRUSH_SPRITE_SIZE);
         }
     }
@@ -490,8 +486,8 @@ public class GuiCanvasEdit extends BasePalette {
                 }
             }
 
-            if (canvasZoom == 1) {
-                // The baked outline sprites only exist at the two base scales (10 and 5).
+            if (canvasZoom == 1 && brushSize < OUTLINE_POSS_1.length) {
+                // The baked outline sprites only exist at the two base scales (10 and 5), sizes 0-3.
                 Vec2 textureVec = baseCanvasPixelScale == SMALL_CANVAS_PIXEL_SCALE ? OUTLINE_POSS_1[brushSize] : OUTLINE_POSS_2[brushSize];
                 RenderSystem.setShaderColor(0.3F, 0.3F, 0.3F, 1.0F);
                 guiGraphics.blit(PALETTE_TEXTURES, x, y, (int) textureVec.x, (int) textureVec.y, outlineSize, outlineSize);
@@ -681,7 +677,7 @@ public class GuiCanvasEdit extends BasePalette {
                 else if (brushOpacitySetting < 0) brushOpacitySetting = maxBrushOpacity;
                 return true;
             } else {
-                final int maxBrushSize = BRUSH_LEVEL_COUNT - 1;
+                final int maxBrushSize = BRUSH_SIZE_COUNT - 1;
                 brushSize += scrollY > 0 ? 1 : -1;
                 if (brushSize > maxBrushSize) brushSize = 0;
                 else if (brushSize < 0) brushSize = maxBrushSize;
@@ -764,8 +760,8 @@ public class GuiCanvasEdit extends BasePalette {
         }
 
         if (inBrushMeter(mouseX, mouseY)) {
-            int selectedSize = 3 - (mouseY - brushMeterY) / BRUSH_SPRITE_SIZE;
-            if (selectedSize <= 3 && selectedSize >= 0) {
+            int selectedSize = (BRUSH_SIZE_COUNT - 1) - (mouseY - brushMeterY) / BRUSH_SPRITE_SIZE;
+            if (selectedSize <= BRUSH_SIZE_COUNT - 1 && selectedSize >= 0) {
                 brushSize = selectedSize;
                 isFilling = false;
             }
@@ -873,7 +869,9 @@ public class GuiCanvasEdit extends BasePalette {
         canvasY += deltaY;
 
         brushMeterX = (int) canvasX + canvasWidth + 2;
-        brushMeterY = (int) canvasY + canvasHeight / 2 + 30;
+        // Shift the meter up by the two new (largest) sizes so they sit above the original four;
+        // the bucket is anchored to brushMeterY, so it moves up with the taller meter.
+        brushMeterY = (int) canvasY + canvasHeight / 2 + 30 - 2 * BRUSH_SPRITE_SIZE;
 
         brushOpacityMeterX = (int) canvasX + canvasWidth + 2;
         brushOpacityMeterY = (int) canvasY;
@@ -1012,7 +1010,7 @@ public class GuiCanvasEdit extends BasePalette {
     }
 
     private boolean inBrushMeter(int x, int y) {
-        return x < brushMeterX + BRUSH_SPRITE_SIZE && x >= brushMeterX && y < brushMeterY + BRUSH_SPRITE_SIZE * 4 && y >= brushMeterY;
+        return x < brushMeterX + BRUSH_SPRITE_SIZE && x >= brushMeterX && y < brushMeterY + BRUSH_SPRITE_SIZE * BRUSH_SIZE_COUNT && y >= brushMeterY;
     }
 
     private boolean inBrushOpacityMeter(int x, int y) {

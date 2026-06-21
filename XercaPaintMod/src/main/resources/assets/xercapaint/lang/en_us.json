@@ -23,6 +23,8 @@
   "canvas.createdOn": "Created on %1$s",
   "canvas.signButton": "Sign",
   "canvas.centerButton": "Center",
+  "canvas.gridButton": "Grid",
+  "canvas.gridButton.tooltip": "Toggle a pixel grid to guide painting (not part of the saved painting)",
   "canvas.finalizeButton": "Sign and Close",
   "canvas.finalizeWarning": "Note! When you sign the painting, it will no longer be editable.",
   "canvas.generation.0": "Original",
